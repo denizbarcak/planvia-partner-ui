@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+.logo-text {
+  background: linear-gradient(135deg, #9333ea 0%, #e879f9 50%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+}
+
+.logo-text-white {
+  background: linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+}
+
+.nav-link {
+  @apply text-gray-700 hover:text-violet-600 transition-colors duration-200 font-medium;
+}
+
+.section {
+  @apply py-20 px-4;
+}
+
+.container {
+  @apply max-w-7xl mx-auto;
+}
+
+.hero-pattern {
+  background: linear-gradient(135deg, #ffffff 0%, #f3f0ff 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-pattern::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(
+    circle,
+    rgba(124, 58, 237, 0.08) 0%,
+    rgba(124, 58, 237, 0) 70%
+  );
+  border-radius: 50%;
+  transform: translate(30%, -30%);
+}
+
+.hero-pattern::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(79, 70, 229, 0.08) 0%,
+    rgba(79, 70, 229, 0) 70%
+  );
+  border-radius: 50%;
+  transform: translate(-30%, 30%);
+}
+
+.hero-heading {
+  color: #1f2937;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-primary {
+  @apply bg-violet-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-violet-700 transition-all duration-200 shadow-lg shadow-violet-200;
+}
+
+.btn-secondary {
+  @apply bg-white text-violet-600 px-6 py-3 rounded-lg font-semibold border-2 border-violet-200 hover:border-violet-300 hover:bg-violet-50 transition-all duration-200;
+}
+
+.hero-text {
+  color: #4b5563;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
