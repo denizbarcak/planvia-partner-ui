@@ -5,13 +5,12 @@ import { motion } from "framer-motion";
 import Header from "@/components/Header";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/20/solid";
 import axios from "axios";
-import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface ILoginResponse {
   message: string;
-  token?: string;
   partner?: {
     id: string;
     companyName: string;
@@ -45,11 +44,10 @@ export default function Login() {
         formData
       );
 
-      if (response.data.token) {
-        // Token'ı localStorage'a kaydet
-        localStorage.setItem("token", response.data.token);
-        toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
-        router.push("/dashboard"); // Başarılı girişte dashboard'a yönlendir
+      if (response.data.partner) {
+        toast.success("Giriş başarılı!");
+        // İşletme paneline yönlendir
+        router.push("/dashboard");
       }
     } catch (error: any) {
       setError(
@@ -73,9 +71,6 @@ export default function Login() {
         >
           {/* Logo ve Başlık */}
           <div className="text-center mb-8">
-            <div className="inline-block bg-white p-4 rounded-xl shadow-sm mb-10">
-              <div className="text-4xl logo-text">PlanVia</div>
-            </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
               İşletme Girişi
             </h2>

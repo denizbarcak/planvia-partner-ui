@@ -2,6 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Calendar Styles */
+.rbc-calendar {
+  width: 100%;
+  background: white;
+  border: none;
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 10px;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.rbc-today {
+  background-color: #ede9fe;
+}
+
+.rbc-event {
+  background-color: #7c3aed;
+  border: none;
+}
+
+.rbc-event.rbc-selected {
+  background-color: #6d28d9;
+}
+
+.rbc-toolbar button {
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.rbc-toolbar button:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: #7c3aed;
+  color: white;
+}
+
+.rbc-toolbar button.rbc-active:hover {
+  background-color: #6d28d9;
+  color: white;
+}
+
+.rbc-month-view {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid #e5e7eb;
+}
+
+.rbc-month-row + .rbc-month-row {
+  border-top: 1px solid #e5e7eb;
+}
+
+.rbc-off-range-bg {
+  background: #f9fafb;
+}
+
+.rbc-header + .rbc-header {
+  border-left: 1px solid #e5e7eb;
+}
+
+.rbc-toolbar {
+  margin-bottom: 20px;
+  padding: 10px 0;
+}
+
+/* Diğer stiller buraya eklenebilir */
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
