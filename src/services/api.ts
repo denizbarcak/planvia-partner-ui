@@ -71,6 +71,56 @@ export const reservationService = {
     }
   },
 
+  // Rezervasyonu güncelle
+  update: async (
+    id: string,
+    reservationData: {
+      name: string;
+      startDate: Date;
+      endDate: Date;
+      isAllDay: boolean;
+      isMultiDay: boolean;
+      capacity: number;
+      recurrence?: {
+        enabled: boolean;
+        type?: string;
+        daysOfWeek?: number[];
+        endType?: string;
+        endAfter?: number;
+        endDate?: Date;
+      };
+    }
+  ) => {
+    try {
+      const response = await api.put(`/reservations/${id}`, {
+        ...reservationData,
+        startDate: reservationData.startDate.toISOString(),
+        endDate: reservationData.endDate.toISOString(),
+        recurrence: reservationData.recurrence?.enabled
+          ? {
+              ...reservationData.recurrence,
+              endDate: reservationData.recurrence.endDate?.toISOString(),
+            }
+          : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Rezervasyon güncelleme hatası:", error);
+      throw error;
+    }
+  },
+
+  // Rezervasyonu sil
+  delete: async (id: string) => {
+    try {
+      const response = await api.delete(`/reservations/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error("Rezervasyon silme hatası:", error);
+      throw error;
+    }
+  },
+
   // Rezervasyonları getir
   getAll: async (start: Date, end: Date) => {
     try {

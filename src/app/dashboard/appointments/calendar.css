@@ -141,84 +141,20 @@
   padding: 2px 4px;
 }
 
+/* Event stilleri için güncellemeler */
 .custom-calendar .rbc-event {
   background-color: #7c3aed;
   border-radius: 6px;
   color: white;
-  padding: 4px 8px;
+  padding: 0;
   font-size: 0.875rem;
   border: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: visible !important;
 }
 
-.custom-calendar .rbc-selected {
-  background-color: #6d28d9 !important;
-}
-
-.custom-calendar .rbc-show-more {
-  color: #7c3aed;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-/* Seçili gün stilleri */
-.custom-calendar .rbc-day-bg.selected-day {
-  background-color: rgba(124, 58, 237, 0.08) !important;
-  border-radius: 6px;
-  position: relative;
-}
-
-.custom-calendar .rbc-day-bg.selected-day::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 2px solid rgba(124, 58, 237, 0.3);
-  border-radius: 6px;
-  pointer-events: none;
-}
-
-/* Sadece hafta görünümü için özel stiller */
-.custom-calendar .rbc-time-view {
-  border: none;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-/* Tüm gün etkinlikleri için özel stiller */
-.custom-calendar .rbc-time-view .rbc-allday-cell {
-  height: auto !important;
-  max-height: none;
-  position: relative;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #fafafa;
-}
-
-.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-row {
-  min-height: auto !important;
-}
-
-.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-event {
-  background-color: #7c3aed;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  margin: 4px;
-  position: relative;
-  width: calc(100% - 8px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-event-content {
-  font-size: 0.875rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.custom-calendar .rbc-event-content {
+  height: 100%;
 }
 
 /* Hafta görünümü için event stilleri */
@@ -226,7 +162,7 @@
   background-color: rgba(124, 58, 237, 0.08);
   border: none;
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 0;
   position: absolute;
   width: 100% !important;
   left: 0;
@@ -237,6 +173,7 @@
   backdrop-filter: blur(8px);
   border: 1px solid rgba(167, 139, 250, 0.7);
   transition: all 0.2s ease;
+  overflow: visible !important;
 }
 
 /* Events container stil düzeltmesi */
@@ -458,6 +395,10 @@
   box-shadow: none !important;
 }
 
+.custom-calendar .rbc-event.past-event button {
+  color: #6b7280 !important;
+}
+
 .custom-calendar .rbc-event.past-event:hover {
   transform: none !important;
   box-shadow: none !important;
@@ -474,11 +415,8 @@
   backdrop-filter: none !important;
 }
 
-.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.past-event:hover {
-  transform: none !important;
-  box-shadow: none !important;
-  background-color: #f3f4f6 !important;
-  border-color: #e5e7eb !important;
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.past-event button {
+  color: #6b7280 !important;
 }
 
 .custom-calendar
@@ -506,4 +444,14 @@
 
 .custom-calendar .rbc-time-view.rbc-time-view--day .rbc-header {
   border: none;
+}
+
+/* Event time label için stil */
+.custom-calendar .rbc-event-label {
+  padding-left: 8px;
+}
+
+/* Hafta görünümü için event stilleri */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event .rbc-event-label {
+  padding-left: 8px;
 }

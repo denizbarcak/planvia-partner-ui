@@ -32,6 +32,17 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./calendar.css";
+import {
+  HomeIcon,
+  CalendarIcon,
+  UsersIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  ArrowLeftCircleIcon,
+  ArrowRightCircleIcon,
+  UserCircleIcon,
+  EllipsisHorizontalIcon,
+} from "@heroicons/react/24/outline";
 
 const localizer = dateFnsLocalizer({
   format,
@@ -85,6 +96,7 @@ const messages = {
   close: "Kapat",
 };
 
+// Event tipini güncelle
 interface Event {
   id: string;
   title: string;
@@ -92,9 +104,17 @@ interface Event {
   end: Date;
   allDay?: boolean;
   resource?: {
-    isMultiDay: boolean;
     capacity: number;
     isPast: boolean;
+    isMultiDay: boolean;
+    recurrence?: {
+      enabled: boolean;
+      type: "daily" | "weekly" | "monthly" | "yearly" | "custom";
+      daysOfWeek: number[];
+      endType: "never" | "after" | "on";
+      endAfter?: number;
+      endDate?: string;
+    };
   };
 }
 
@@ -105,7 +125,9 @@ interface CreateEventModalProps {
     start: Date;
     end: Date;
   } | null;
-  onSuccess: () => void; // Add onSuccess prop
+  onSuccess: () => void;
+  editMode?: boolean;
+  eventToEdit?: Event | null;
 }
 
 const CreateEventModal = ({
@@ -113,6 +135,8 @@ const CreateEventModal = ({
   onClose,
   selectedSlot,
   onSuccess,
+  editMode = false,
+  eventToEdit = null,
 }: CreateEventModalProps): JSX.Element | null => {
   const router = useRouter();
   const [reservationName, setReservationName] = useState("");
@@ -122,15 +146,14 @@ const CreateEventModal = ({
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringType, setRecurringType] = useState<
-    "daily" | "weekly" | "monthly" | "yearly" | "custom"
-  >("weekly");
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [recurringEndType, setRecurringEndType] = useState<
-    "never" | "after" | "on"
-  >("never");
-  const [recurringEndCount, setRecurringEndCount] = useState(1);
+  const [recurringEndType, setRecurringEndType] = useState<"after" | "on">(
+    "after"
+  );
+  const [recurringEndCount, setRecurringEndCount] = useState(0);
   const [recurringEndDate, setRecurringEndDate] = useState<Date | null>(null);
+  const [nameError, setNameError] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // Form resetleme fonksiyonu
   const resetForm = () => {
@@ -141,12 +164,39 @@ const CreateEventModal = ({
     setStartTime(null);
     setEndTime(null);
     setIsRecurring(false);
-    setRecurringType("weekly");
     setSelectedDays([]);
-    setRecurringEndType("never");
-    setRecurringEndCount(1);
+    setRecurringEndType("after");
+    setRecurringEndCount(0);
     setRecurringEndDate(null);
+    setNameError(false);
   };
+
+  // Düzenleme modunda form verilerini doldur
+  useEffect(() => {
+    if (editMode && eventToEdit) {
+      setReservationName(eventToEdit.title);
+      setReservationCount(eventToEdit.resource?.capacity || 1);
+      setIsAllDay(eventToEdit.allDay || false);
+      setIsMultiDay(eventToEdit.resource?.isMultiDay || false);
+      setStartTime(eventToEdit.start);
+      setEndTime(eventToEdit.end);
+
+      // Tekrarlama ayarlarını doldur
+      const recurrence = eventToEdit.resource?.recurrence;
+      if (recurrence?.enabled) {
+        setIsRecurring(true);
+        setSelectedDays(recurrence.daysOfWeek || []);
+        setRecurringEndType(
+          recurrence.endType === "never" ? "after" : recurrence.endType
+        );
+        if (recurrence.endType === "after") {
+          setRecurringEndCount(recurrence.endAfter || 1);
+        } else if (recurrence.endType === "on" && recurrence.endDate) {
+          setRecurringEndDate(new Date(recurrence.endDate));
+        }
+      }
+    }
+  }, [editMode, eventToEdit]);
 
   // Modal kapanırken formu resetle
   const handleClose = () => {
@@ -160,6 +210,7 @@ const CreateEventModal = ({
 
     setStartTime(selectedSlot.start);
     setEndTime(selectedSlot.end);
+    // Başlangıç gününü otomatik seç
     setSelectedDays([selectedSlot.start.getDay()]);
 
     return () => {
@@ -170,45 +221,128 @@ const CreateEventModal = ({
   const handleSave = async () => {
     if (!selectedSlot || !startTime || !endTime) return;
 
+    // İsim alanı validasyonu
+    if (!reservationName.trim()) {
+      setNameError(true);
+      toast.error("Lütfen rezervasyon adını giriniz");
+      return;
+    }
+
     try {
-      // Rezervasyon verilerini hazırla
-      const reservationData = {
-        name: reservationName,
-        startDate: startTime,
-        endDate: endTime,
-        isAllDay,
-        isMultiDay,
-        capacity: reservationCount,
-        ...(isRecurring && {
-          recurrence: {
-            enabled: true,
-            type: recurringType,
-            daysOfWeek: selectedDays,
-            endType: recurringEndType,
-            ...(recurringEndType === "after" && {
-              endAfter: recurringEndCount,
-            }),
-            ...(recurringEndType === "on" &&
-              recurringEndDate && { endDate: recurringEndDate }),
-          },
-        }),
-      };
+      if (isRecurring) {
+        // Seçili günlerde rezervasyonlar oluştur
+        const startDate = startOfDay(startTime);
+        const promises: Promise<any>[] = [];
 
-      // API'ye gönder
-      await reservationService.create(reservationData);
+        // Seçili hafta sayısı kadar döngü
+        for (let week = 0; week <= recurringEndCount; week++) {
+          // Her seçili gün için rezervasyon oluştur
+          selectedDays.forEach((dayId) => {
+            // Seçili günün tarihini hesapla
+            const dayDiff = dayId - startDate.getDay();
+            let reservationDate = addDays(startDate, dayDiff);
 
-      // Başarılı mesajı göster
-      toast.success("Rezervasyon başarıyla oluşturuldu");
+            // Eğer bu hafta değilse, hafta sayısı kadar ileri al
+            if (week > 0) {
+              reservationDate = addDays(reservationDate, week * 7);
+            }
+
+            // Saatleri ayarla
+            const reservationStartTime = new Date(reservationDate);
+            reservationStartTime.setHours(
+              startTime.getHours(),
+              startTime.getMinutes()
+            );
+
+            const reservationEndTime = new Date(reservationDate);
+            reservationEndTime.setHours(
+              endTime.getHours(),
+              endTime.getMinutes()
+            );
+
+            const reservationData = {
+              name: reservationName.trim(),
+              startDate: reservationStartTime,
+              endDate: reservationEndTime,
+              isAllDay,
+              isMultiDay,
+              capacity: reservationCount,
+            };
+
+            // İlk gün ve ilk hafta için güncelleme, diğerleri için yeni oluşturma
+            if (
+              editMode &&
+              eventToEdit?.id &&
+              week === 0 &&
+              dayId === startDate.getDay()
+            ) {
+              promises.push(
+                reservationService.update(eventToEdit.id, reservationData)
+              );
+            } else {
+              promises.push(reservationService.create(reservationData));
+            }
+          });
+        }
+
+        await Promise.all(promises);
+        toast.success(
+          editMode
+            ? "Rezervasyonlar başarıyla güncellendi"
+            : "Rezervasyonlar başarıyla oluşturuldu"
+        );
+      } else {
+        // Tekrarsız tek rezervasyon oluştur
+        const reservationData = {
+          name: reservationName.trim(),
+          startDate: startTime,
+          endDate: endTime,
+          isAllDay,
+          isMultiDay,
+          capacity: reservationCount,
+        };
+
+        if (editMode && eventToEdit?.id) {
+          await reservationService.update(eventToEdit.id, reservationData);
+          toast.success("Rezervasyon başarıyla güncellendi");
+        } else {
+          await reservationService.create(reservationData);
+          toast.success("Rezervasyon başarıyla oluşturuldu");
+        }
+      }
 
       // Modal'ı kapat ve formu resetle
       handleClose();
-      onSuccess(); // Call onSuccess after successful creation
+      onSuccess();
     } catch (error: any) {
-      console.error("Rezervasyon oluşturma hatası:", error);
+      console.error("Rezervasyon işlemi hatası:", error);
       if (error?.response?.status === 401) {
         router.push("/login");
       } else {
-        toast.error("Rezervasyon oluşturulurken bir hata oluştu");
+        toast.error(
+          editMode
+            ? "Rezervasyon güncellenirken bir hata oluştu"
+            : "Rezervasyon oluşturulurken bir hata oluştu"
+        );
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editMode || !eventToEdit?.id) return;
+
+    try {
+      await reservationService.delete(eventToEdit.id);
+      toast.success("Rezervasyon başarıyla silindi");
+      setIsDeleteConfirmOpen(false);
+      handleClose();
+      onSuccess();
+    } catch (error: any) {
+      console.error("Rezervasyon silme hatası:", error);
+      if (error?.response?.status === 401) {
+        router.push("/login");
+      } else {
+        toast.error("Rezervasyon silinirken bir hata oluştu");
       }
     }
   };
@@ -237,22 +371,628 @@ const CreateEventModal = ({
   ];
 
   const toggleDay = (dayId: number) => {
-    setSelectedDays((prev) =>
-      prev.includes(dayId) ? prev.filter((d) => d !== dayId) : [...prev, dayId]
-    );
+    if (!selectedSlot) return;
+
+    // Seçilen günden önceki günleri filtrele
+    const startDay = selectedSlot.start.getDay();
+    setSelectedDays((prev) => {
+      // Hafta sayısı 0'dan büyükse tüm günlere izin ver
+      const filteredDays =
+        recurringEndCount > 0
+          ? prev // Tüm günleri koru
+          : prev.filter((d) => {
+              if (d === 0) return true; // Pazar gününü her zaman kabul et
+              return d >= startDay; // Diğer günler için normal kontrol
+            });
+
+      return filteredDays.includes(dayId)
+        ? filteredDays.filter((d) => d !== dayId)
+        : [...filteredDays, dayId];
+    });
   };
 
   if (!selectedSlot || !startTime || !endTime) return null;
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
+    <>
+      <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-white rounded-2xl shadow-xl p-6 w-[700px]">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium text-violet-600 uppercase tracking-wide">
+                {editMode ? "REZERVASYON DÜZENLE" : "REZERVASYON OLUŞTUR"}
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <Dialog.Title className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+              Rezervasyon Planı
+              <button className="text-gray-400 hover:text-yellow-500 transition-colors">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                  />
+                </svg>
+              </button>
+            </Dialog.Title>
+
+            <div className="space-y-6">
+              {/* Rezervasyon Adı */}
+              <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
+                <div className="text-gray-500">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Rezervasyon adı"
+                    value={reservationName}
+                    onChange={(e) => {
+                      setReservationName(e.target.value);
+                      setNameError(false);
+                    }}
+                    className={`w-full bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm ${
+                      nameError
+                        ? "border-2 border-red-500 focus:border-red-500"
+                        : ""
+                    }`}
+                  />
+                  {nameError && (
+                    <p className="mt-1 text-sm text-red-500">
+                      Rezervasyon adı gereklidir
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Tarih ve Saat Seçimi */}
+              <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
+                <div className="text-gray-500">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex flex-col gap-3 flex-1">
+                  {/* Tüm Gün ve Çoklu Gün Seçenekleri */}
+                  <div className="flex items-center gap-4">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isAllDay}
+                        onChange={(e) => setIsAllDay(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-700">
+                        Tüm Gün
+                      </span>
+                    </label>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isMultiDay}
+                        onChange={(e) => setIsMultiDay(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-700">
+                        Birden Fazla Gün
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Tarih ve Saat */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm">
+                        {format(startTime, "d MMM EEE", { locale: tr })}
+                      </div>
+                      <input
+                        type="time"
+                        value={isAllDay ? "00:00" : format(startTime, "HH:mm")}
+                        disabled={isAllDay}
+                        onChange={(e) => {
+                          if (!isAllDay && startTime) {
+                            const [hours, minutes] = e.target.value
+                              .split(":")
+                              .map(Number);
+                            const newStartTime = new Date(startTime);
+                            newStartTime.setHours(hours);
+                            newStartTime.setMinutes(minutes);
+                            setStartTime(newStartTime);
+                          }
+                        }}
+                        className={`bg-white rounded-lg px-4 py-2 text-gray-900 w-24 shadow-sm ${
+                          isAllDay ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      />
+                    </div>
+                    <span className="text-gray-500">-</span>
+                    <div className="flex items-center gap-2">
+                      {isMultiDay ? (
+                        <input
+                          type="date"
+                          value={endTime ? format(endTime, "yyyy-MM-dd") : ""}
+                          min={format(startTime, "yyyy-MM-dd")}
+                          onChange={(e) => {
+                            const newDate = new Date(e.target.value);
+                            if (newDate >= startTime) {
+                              // Saati koruyarak tarihi güncelle
+                              const newEndDate = new Date(newDate);
+                              if (endTime) {
+                                newEndDate.setHours(endTime.getHours());
+                                newEndDate.setMinutes(endTime.getMinutes());
+                              }
+                              setEndTime(newEndDate);
+                            }
+                          }}
+                          className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm"
+                        />
+                      ) : null}
+                      <div className="flex items-center">
+                        <input
+                          type="time"
+                          value={
+                            isAllDay
+                              ? "23:59"
+                              : endTime
+                              ? format(endTime, "HH:mm")
+                              : ""
+                          }
+                          onChange={(e) => {
+                            if (!isAllDay && selectedSlot) {
+                              const [hours, minutes] = e.target.value
+                                .split(":")
+                                .map(Number);
+
+                              // Bitiş tarihi seçiliyse onu kullan, değilse başlangıç tarihini kullan
+                              const baseDate =
+                                isMultiDay && endTime ? endTime : startTime;
+                              const newEndTime = new Date(baseDate);
+                              newEndTime.setHours(hours);
+                              newEndTime.setMinutes(minutes);
+
+                              // Çoklu gün seçili değilse başlangıç saati kontrolü yap
+                              if (!isMultiDay) {
+                                if (newEndTime > startTime) {
+                                  setEndTime(newEndTime);
+                                } else {
+                                  const defaultEndTime = new Date(
+                                    startTime.getTime() + 30 * 60000
+                                  );
+                                  setEndTime(defaultEndTime);
+                                }
+                              } else {
+                                setEndTime(newEndTime);
+                              }
+                            }
+                          }}
+                          min={
+                            !isMultiDay && selectedSlot
+                              ? format(startTime, "HH:mm")
+                              : undefined
+                          }
+                          disabled={isAllDay}
+                          className={`bg-white rounded-lg px-4 py-2 text-gray-900 w-24 shadow-sm ${
+                            isAllDay ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
+                        />
+                        {!isAllDay && (
+                          <div className="flex flex-col ml-1">
+                            <button
+                              onClick={() => adjustEndTime(30)}
+                              disabled={isAllDay}
+                              className="p-1 hover:bg-white rounded-lg shadow-sm disabled:cursor-not-allowed"
+                            >
+                              <svg
+                                className="w-4 h-4 text-gray-500"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 15l7-7 7 7"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => adjustEndTime(-30)}
+                              disabled={isAllDay}
+                              className="p-1 hover:bg-white rounded-lg shadow-sm disabled:cursor-not-allowed"
+                            >
+                              <svg
+                                className="w-4 h-4 text-gray-500"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kontenjan Sayısı */}
+              <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
+                <div className="text-gray-500">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={reservationCount}
+                      onChange={(e) =>
+                        setReservationCount(
+                          Math.max(1, parseInt(e.target.value) || 1)
+                        )
+                      }
+                      className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm w-24"
+                    />
+                    <span className="text-gray-700">kontenjan</span>
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    İşletme türüne göre masa, kişi veya seans sayısı
+                  </div>
+                </div>
+              </div>
+
+              {/* Tekrarlama Seçenekleri */}
+              <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
+                <div className="text-gray-500">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isRecurring}
+                        onChange={(e) => setIsRecurring(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-700">
+                        Rezervasyonu Tekrarla
+                      </span>
+                    </label>
+
+                    {/* Bilgi İkonu ve Tooltip */}
+                    <div className="relative group">
+                      <svg
+                        className="w-5 h-5 text-gray-400 cursor-help"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      <div className="absolute z-10 invisible group-hover:visible bg-gray-900 text-white text-sm rounded-lg py-2 px-3 w-72 right-0 top-6 shadow-lg">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="font-medium">Her Hafta:</p>
+                            <p className="text-gray-300 text-xs">
+                              Cumartesi ve Pazar seçildiğinde, bir ay için:
+                            </p>
+                            <ul className="text-gray-300 text-xs mt-1 list-disc list-inside">
+                              <li>17-18 Şubat</li>
+                              <li>24-25 Şubat</li>
+                              <li>2-3 Mart</li>
+                              <li>9-10 Mart</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <p className="font-medium">Her Ay:</p>
+                            <p className="text-gray-300 text-xs">
+                              17-18 Şubat seçildiğinde, 4 ay için:
+                            </p>
+                            <ul className="text-gray-300 text-xs mt-1 list-disc list-inside">
+                              <li>17-18 Şubat</li>
+                              <li>17-18 Mart</li>
+                              <li>17-18 Nisan</li>
+                              <li>17-18 Mayıs</li>
+                            </ul>
+                          </div>
+
+                          <p className="text-xs text-gray-400 border-t border-gray-700 pt-2">
+                            Not: Tarihler seçtiğiniz başlangıç gününe göre
+                            değişecektir
+                          </p>
+                        </div>
+                        <div className="absolute w-2 h-2 bg-gray-900 transform rotate-45 -top-1 right-6"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isRecurring && (
+                    <div className="mt-4 space-y-4">
+                      {/* Gün Seçimi */}
+                      <div className="flex flex-wrap gap-2">
+                        {weekDays.map((day) => {
+                          const isStartDay =
+                            selectedSlot &&
+                            day.id === selectedSlot.start.getDay();
+                          const isSelected = selectedDays.includes(day.id);
+
+                          // Seçilen günden önceki günleri kontrol et
+                          const isPastDay =
+                            selectedSlot &&
+                            (() => {
+                              // Hafta sayısı 0'dan büyükse hiçbir gün geçmiş sayılmaz
+                              if (recurringEndCount > 0) return false;
+
+                              const startDay = selectedSlot.start.getDay();
+                              // Pazar günü için özel kontrol (0)
+                              if (day.id === 0) return false; // Pazar günü her zaman tıklanabilir
+                              return day.id < startDay;
+                            })();
+
+                          // Başlangıç günü dışında tüm günler seçilebilir olmalı
+                          const isDisabled = isStartDay;
+
+                          return (
+                            <button
+                              key={day.id}
+                              onClick={() => !isDisabled && toggleDay(day.id)}
+                              disabled={isDisabled}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                isStartDay
+                                  ? "bg-violet-600 text-white cursor-not-allowed opacity-75"
+                                  : isPastDay
+                                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                  : isSelected
+                                  ? "bg-violet-600 text-white"
+                                  : "bg-white text-gray-700 hover:bg-gray-100"
+                              }`}
+                            >
+                              {day.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Tekrarlama Bitiş Seçenekleri */}
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium text-gray-700 mb-2">
+                          Tekrarlama Sonu
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            id="after"
+                            checked={recurringEndType === "after"}
+                            onChange={() => setRecurringEndType("after")}
+                            className="text-violet-600 focus:ring-violet-500"
+                          />
+                          <label
+                            htmlFor="after"
+                            className="text-sm text-gray-700"
+                          >
+                            Kaç hafta:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={recurringEndCount}
+                            onChange={(e) =>
+                              setRecurringEndCount(
+                                Math.max(0, parseInt(e.target.value) || 0)
+                              )
+                            }
+                            disabled={recurringEndType !== "after"}
+                            className={`bg-white rounded-lg px-3 py-1 text-gray-900 shadow-sm w-20 text-sm ${
+                              recurringEndType !== "after" ? "opacity-50" : ""
+                            }`}
+                          />
+                          <span className="text-sm text-gray-700">hafta</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            id="on"
+                            checked={recurringEndType === "on"}
+                            onChange={() => setRecurringEndType("on")}
+                            className="text-violet-600 focus:ring-violet-500"
+                          />
+                          <label htmlFor="on" className="text-sm text-gray-700">
+                            Tarihte:
+                          </label>
+                          <input
+                            type="date"
+                            value={
+                              recurringEndDate
+                                ? format(recurringEndDate, "yyyy-MM-dd")
+                                : ""
+                            }
+                            onChange={(e) =>
+                              setRecurringEndDate(new Date(e.target.value))
+                            }
+                            disabled={recurringEndType !== "on"}
+                            className={`bg-white rounded-lg px-3 py-1 text-gray-900 shadow-sm text-sm ${
+                              recurringEndType !== "on" ? "opacity-50" : ""
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Kaydet Butonu */}
+              <div className="flex justify-end pt-2 gap-3">
+                {editMode && (
+                  <button
+                    onClick={() => setIsDeleteConfirmOpen(true)}
+                    className="bg-red-600 text-white px-6 py-2.5 rounded-xl hover:bg-red-700 transition-colors font-medium"
+                  >
+                    Sil
+                  </button>
+                )}
+                <button
+                  onClick={handleSave}
+                  className="bg-violet-600 text-white px-6 py-2.5 rounded-xl hover:bg-violet-700 transition-colors font-medium"
+                >
+                  {editMode ? "Güncelle" : "Kaydet"}
+                </button>
+              </div>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      {/* Silme Onay Modalı */}
+      <Dialog
+        open={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        className="relative z-[60]"
+      >
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-auto">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              Rezervasyonu Sil
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-gray-600 mb-6">
+              Bu rezervasyonu silmek istediğinizden emin misiniz? Bu işlem geri
+              alınamaz.
+            </Dialog.Description>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors text-sm font-medium"
+              >
+                Hayır
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+              >
+                Evet
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    </>
+  );
+};
+
+// ReservationDetailsModal bileşeni
+const ReservationDetailsModal = ({
+  isOpen,
+  onClose,
+  event,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  event: Event;
+}) => {
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="bg-white rounded-2xl shadow-xl p-6 w-[700px]">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-medium text-violet-600 uppercase tracking-wide">
-              REZERVASYON OLUŞTUR
+          <div className="flex items-center justify-between mb-6">
+            <div className="text-lg font-semibold text-gray-900">
+              Rezervasyon Detayları
             </div>
             <button
               onClick={onClose}
@@ -272,502 +1012,6 @@ const CreateEventModal = ({
                 />
               </svg>
             </button>
-          </div>
-
-          <Dialog.Title className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-            Rezervasyon Planı
-            <button className="text-gray-400 hover:text-yellow-500 transition-colors">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                />
-              </svg>
-            </button>
-          </Dialog.Title>
-
-          <div className="space-y-6">
-            {/* Rezervasyon Adı */}
-            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
-              <div className="text-gray-500">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Rezervasyon adı"
-                  value={reservationName}
-                  onChange={(e) => setReservationName(e.target.value)}
-                  className="w-full bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm"
-                />
-              </div>
-            </div>
-
-            {/* Tarih ve Saat Seçimi */}
-            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
-              <div className="text-gray-500">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="flex flex-col gap-3 flex-1">
-                {/* Tüm Gün ve Çoklu Gün Seçenekleri */}
-                <div className="flex items-center gap-4">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isAllDay}
-                      onChange={(e) => setIsAllDay(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-700">
-                      Tüm Gün
-                    </span>
-                  </label>
-
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isMultiDay}
-                      onChange={(e) => setIsMultiDay(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-700">
-                      Birden Fazla Gün
-                    </span>
-                  </label>
-                </div>
-
-                {/* Tarih ve Saat */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm">
-                      {format(startTime, "d MMM EEE", { locale: tr })}
-                    </div>
-                    <input
-                      type="time"
-                      value={isAllDay ? "00:00" : format(startTime, "HH:mm")}
-                      disabled={isAllDay}
-                      onChange={(e) => {
-                        if (!isAllDay && startTime) {
-                          const [hours, minutes] = e.target.value
-                            .split(":")
-                            .map(Number);
-                          const newStartTime = new Date(startTime);
-                          newStartTime.setHours(hours);
-                          newStartTime.setMinutes(minutes);
-                          setStartTime(newStartTime);
-                        }
-                      }}
-                      className={`bg-white rounded-lg px-4 py-2 text-gray-900 w-24 shadow-sm ${
-                        isAllDay ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    />
-                  </div>
-                  <span className="text-gray-500">-</span>
-                  <div className="flex items-center gap-2">
-                    {isMultiDay ? (
-                      <input
-                        type="date"
-                        value={endTime ? format(endTime, "yyyy-MM-dd") : ""}
-                        min={format(startTime, "yyyy-MM-dd")}
-                        onChange={(e) => {
-                          const newDate = new Date(e.target.value);
-                          if (newDate >= startTime) {
-                            // Saati koruyarak tarihi güncelle
-                            const newEndDate = new Date(newDate);
-                            if (endTime) {
-                              newEndDate.setHours(endTime.getHours());
-                              newEndDate.setMinutes(endTime.getMinutes());
-                            }
-                            setEndTime(newEndDate);
-                          }
-                        }}
-                        className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm"
-                      />
-                    ) : null}
-                    <div className="flex items-center">
-                      <input
-                        type="time"
-                        value={
-                          isAllDay
-                            ? "23:59"
-                            : endTime
-                            ? format(endTime, "HH:mm")
-                            : ""
-                        }
-                        onChange={(e) => {
-                          if (!isAllDay && selectedSlot) {
-                            const [hours, minutes] = e.target.value
-                              .split(":")
-                              .map(Number);
-
-                            // Bitiş tarihi seçiliyse onu kullan, değilse başlangıç tarihini kullan
-                            const baseDate =
-                              isMultiDay && endTime ? endTime : startTime;
-                            const newEndTime = new Date(baseDate);
-                            newEndTime.setHours(hours);
-                            newEndTime.setMinutes(minutes);
-
-                            // Çoklu gün seçili değilse başlangıç saati kontrolü yap
-                            if (!isMultiDay) {
-                              if (newEndTime > startTime) {
-                                setEndTime(newEndTime);
-                              } else {
-                                const defaultEndTime = new Date(
-                                  startTime.getTime() + 30 * 60000
-                                );
-                                setEndTime(defaultEndTime);
-                              }
-                            } else {
-                              setEndTime(newEndTime);
-                            }
-                          }
-                        }}
-                        min={
-                          !isMultiDay && selectedSlot
-                            ? format(startTime, "HH:mm")
-                            : undefined
-                        }
-                        disabled={isAllDay}
-                        className={`bg-white rounded-lg px-4 py-2 text-gray-900 w-24 shadow-sm ${
-                          isAllDay ? "opacity-50 cursor-not-allowed" : ""
-                        }`}
-                      />
-                      {!isAllDay && (
-                        <div className="flex flex-col ml-1">
-                          <button
-                            onClick={() => adjustEndTime(30)}
-                            disabled={isAllDay}
-                            className="p-1 hover:bg-white rounded-lg shadow-sm disabled:cursor-not-allowed"
-                          >
-                            <svg
-                              className="w-4 h-4 text-gray-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 15l7-7 7 7"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => adjustEndTime(-30)}
-                            disabled={isAllDay}
-                            className="p-1 hover:bg-white rounded-lg shadow-sm disabled:cursor-not-allowed"
-                          >
-                            <svg
-                              className="w-4 h-4 text-gray-500"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Kontenjan Sayısı */}
-            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
-              <div className="text-gray-500">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    value={reservationCount}
-                    onChange={(e) =>
-                      setReservationCount(
-                        Math.max(1, parseInt(e.target.value) || 1)
-                      )
-                    }
-                    className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm w-24"
-                  />
-                  <span className="text-gray-700">kontenjan</span>
-                </div>
-                <div className="mt-1 text-sm text-gray-500">
-                  İşletme türüne göre masa, kişi veya seans sayısı
-                </div>
-              </div>
-            </div>
-
-            {/* Tekrarlama Seçenekleri */}
-            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl">
-              <div className="text-gray-500">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isRecurring}
-                      onChange={(e) => setIsRecurring(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-700">
-                      Rezervasyonu Tekrarla
-                    </span>
-                  </label>
-
-                  {/* Bilgi İkonu ve Tooltip */}
-                  <div className="relative group">
-                    <svg
-                      className="w-5 h-5 text-gray-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute z-10 invisible group-hover:visible bg-gray-900 text-white text-sm rounded-lg py-2 px-3 w-72 right-0 top-6 shadow-lg">
-                      <div className="space-y-3">
-                        <div>
-                          <p className="font-medium">Her Hafta:</p>
-                          <p className="text-gray-300 text-xs">
-                            Cumartesi ve Pazar seçildiğinde, bir ay için:
-                          </p>
-                          <ul className="text-gray-300 text-xs mt-1 list-disc list-inside">
-                            <li>17-18 Şubat</li>
-                            <li>24-25 Şubat</li>
-                            <li>2-3 Mart</li>
-                            <li>9-10 Mart</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <p className="font-medium">Her Ay:</p>
-                          <p className="text-gray-300 text-xs">
-                            17-18 Şubat seçildiğinde, 4 ay için:
-                          </p>
-                          <ul className="text-gray-300 text-xs mt-1 list-disc list-inside">
-                            <li>17-18 Şubat</li>
-                            <li>17-18 Mart</li>
-                            <li>17-18 Nisan</li>
-                            <li>17-18 Mayıs</li>
-                          </ul>
-                        </div>
-
-                        <p className="text-xs text-gray-400 border-t border-gray-700 pt-2">
-                          Not: Tarihler seçtiğiniz başlangıç gününe göre
-                          değişecektir
-                        </p>
-                      </div>
-                      <div className="absolute w-2 h-2 bg-gray-900 transform rotate-45 -top-1 right-6"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {isRecurring && (
-                  <div className="mt-4 space-y-4">
-                    {/* Tekrarlama Tipi */}
-                    <div className="flex items-center gap-3">
-                      <select
-                        value={recurringType}
-                        onChange={(e) =>
-                          setRecurringType(e.target.value as any)
-                        }
-                        className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm"
-                      >
-                        <option value="daily">Her gün</option>
-                        <option value="weekly">Her hafta</option>
-                        <option value="monthly">Her ay</option>
-                        <option value="yearly">Her yıl</option>
-                        <option value="custom">Özel</option>
-                      </select>
-                    </div>
-
-                    {/* Haftalık tekrar için gün seçimi */}
-                    {recurringType === "weekly" && (
-                      <div className="flex flex-wrap gap-2">
-                        {weekDays.map((day) => (
-                          <button
-                            key={day.id}
-                            onClick={() => toggleDay(day.id)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              selectedDays.includes(day.id)
-                                ? "bg-violet-600 text-white"
-                                : "bg-white text-gray-700 hover:bg-gray-100"
-                            }`}
-                          >
-                            {day.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Tekrarlama Bitiş Seçenekleri */}
-                    <div className="space-y-3">
-                      <div className="text-sm font-medium text-gray-700 mb-2">
-                        Tekrarlama Sonu
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          id="never"
-                          checked={recurringEndType === "never"}
-                          onChange={() => setRecurringEndType("never")}
-                          className="text-violet-600 focus:ring-violet-500"
-                        />
-                        <label
-                          htmlFor="never"
-                          className="text-sm text-gray-700"
-                        >
-                          Süresiz
-                        </label>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          id="after"
-                          checked={recurringEndType === "after"}
-                          onChange={() => setRecurringEndType("after")}
-                          className="text-violet-600 focus:ring-violet-500"
-                        />
-                        <label
-                          htmlFor="after"
-                          className="text-sm text-gray-700"
-                        >
-                          Tekrar sayısı:
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={recurringEndCount}
-                          onChange={(e) =>
-                            setRecurringEndCount(
-                              Math.max(1, parseInt(e.target.value) || 1)
-                            )
-                          }
-                          disabled={recurringEndType !== "after"}
-                          className={`bg-white rounded-lg px-3 py-1 text-gray-900 shadow-sm w-20 text-sm ${
-                            recurringEndType !== "after" ? "opacity-50" : ""
-                          }`}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          id="on"
-                          checked={recurringEndType === "on"}
-                          onChange={() => setRecurringEndType("on")}
-                          className="text-violet-600 focus:ring-violet-500"
-                        />
-                        <label htmlFor="on" className="text-sm text-gray-700">
-                          Tarihte:
-                        </label>
-                        <input
-                          type="date"
-                          value={
-                            recurringEndDate
-                              ? format(recurringEndDate, "yyyy-MM-dd")
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setRecurringEndDate(new Date(e.target.value))
-                          }
-                          disabled={recurringEndType !== "on"}
-                          className={`bg-white rounded-lg px-3 py-1 text-gray-900 shadow-sm text-sm ${
-                            recurringEndType !== "on" ? "opacity-50" : ""
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Kaydet Butonu */}
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={handleSave}
-                className="bg-violet-600 text-white px-6 py-2.5 rounded-xl hover:bg-violet-700 transition-colors font-medium"
-              >
-                Kaydet
-              </button>
-            </div>
           </div>
         </Dialog.Panel>
       </div>
@@ -817,26 +1061,102 @@ const DayHeader = ({ date, label }: { date: Date; label: string }) => {
   );
 };
 
+// Rezervasyonları formatla
 const formatEvents = (reservations: any[]): Event[] => {
-  const now = new Date();
-  return (reservations || []).map((reservation: any) => {
+  console.log("Backend'den gelen rezervasyonlar:", reservations);
+  return reservations.map((reservation) => {
+    console.log(
+      "Reservation raw ID:",
+      reservation.id,
+      "MongoDB _id:",
+      reservation._id
+    );
     const start = new Date(reservation.startDate);
     const end = new Date(reservation.endDate);
-    const isPast = end < now;
+    const isPast = end < new Date();
 
-    return {
-      id: reservation._id,
+    const formattedEvent = {
+      id: reservation.id || reservation._id, // Handle both possible ID fields
       title: reservation.name,
-      start: start,
-      end: end,
+      start,
+      end,
       allDay: reservation.isAllDay,
       resource: {
-        isMultiDay: reservation.isMultiDay,
         capacity: reservation.capacity,
         isPast: isPast,
+        isMultiDay: reservation.isMultiDay,
+        recurrence: reservation.recurrence,
       },
     };
+    console.log("Formatlanmış event:", formattedEvent);
+    return formattedEvent;
   });
+};
+
+// Özel Event Komponenti
+const CustomEvent = ({
+  event,
+  onEventUpdate,
+}: {
+  event: Event;
+  onEventUpdate: () => void;
+}) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const isPast = event.resource?.isPast;
+
+  return (
+    <div className="relative h-full">
+      <button
+        className="absolute right-1 top-1 p-0.5 rounded hover:bg-black/10 transition-colors"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsModalOpen(true);
+        }}
+      >
+        <EllipsisHorizontalIcon
+          className={`w-3 h-3 ${isPast ? "text-gray-400" : "text-inherit"}`}
+        />
+      </button>
+      <div
+        className="px-2 py-1 h-full cursor-pointer"
+        onClick={() => setIsDetailsModalOpen(true)}
+      >
+        <div
+          className={`text-sm font-medium ${
+            isPast ? "text-gray-400" : "text-gray-900"
+          }`}
+        >
+          {event.title}
+        </div>
+      </div>
+
+      {isModalOpen && (
+        <CreateEventModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          selectedSlot={{
+            start: event.start,
+            end: event.end,
+          }}
+          onSuccess={() => {
+            setIsModalOpen(false);
+            onEventUpdate();
+          }}
+          editMode={true}
+          eventToEdit={event}
+        />
+      )}
+
+      {isDetailsModalOpen && (
+        <ReservationDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => setIsDetailsModalOpen(false)}
+          event={event}
+        />
+      )}
+    </div>
+  );
 };
 
 export default function Appointments() {
@@ -1061,15 +1381,15 @@ export default function Appointments() {
   }, []);
 
   return (
-    <div className="h-[calc(100vh-80px)] p-2">
-      <Card className="bg-white rounded-3xl shadow-sm overflow-hidden h-full">
+    <div className="h-[calc(100vh-80px)] p-2 transition-all duration-300 ease-in-out">
+      <Card className="bg-white rounded-3xl shadow-sm overflow-hidden h-full w-full">
         <div className="p-2 h-full flex flex-col">
           <Calendar
             localizer={localizer}
             events={events}
             startAccessor="start"
             endAccessor="end"
-            style={{ height: "100%" }}
+            style={{ height: "100%", width: "100%" }}
             formats={formats}
             messages={messages}
             view={view}
@@ -1087,6 +1407,9 @@ export default function Appointments() {
               week: {
                 header: WeekHeader,
               },
+              event: (props) => (
+                <CustomEvent {...props} onEventUpdate={loadEvents} />
+              ),
             }}
           />
         </div>

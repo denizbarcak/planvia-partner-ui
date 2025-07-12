@@ -22,8 +22,12 @@ const menuItems = [
   { name: "Ayarlar", icon: Cog6ToothIcon, href: "/dashboard/settings" },
 ];
 
-export default function Sidebar() {
-  const [isExpanded, setIsExpanded] = useState(true);
+interface SidebarProps {
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+export default function Sidebar({ isExpanded, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
   // Bu kısım daha sonra API'den gelecek
@@ -46,7 +50,7 @@ export default function Sidebar() {
           PlanVia
         </Link>
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={onToggle}
           className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
         >
           {isExpanded ? (
