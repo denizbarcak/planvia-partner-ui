@@ -16,6 +16,7 @@ interface ILoginResponse {
     companyName: string;
     email: string;
   };
+  token?: string; // Add token to interface
 }
 
 export default function Login() {
@@ -44,7 +45,9 @@ export default function Login() {
         formData
       );
 
-      if (response.data.partner) {
+      if (response.data.partner && response.data.token) {
+        // Store the token
+        localStorage.setItem("accessToken", response.data.token);
         toast.success("Giriş başarılı!");
         // İşletme paneline yönlendir
         router.push("/dashboard");

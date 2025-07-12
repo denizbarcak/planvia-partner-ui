@@ -17,10 +17,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr">
+    <html lang="en">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/react-big-calendar@1.8.7/lib/css/react-big-calendar.css"
+        />
+      </head>
       <body className={inter.className}>
-        <Toaster position="top-right" />
         {children}
+        <Toaster position="top-right" />
       </body>
     </html>
   );

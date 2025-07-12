@@ -1,0 +1,451 @@
+/* Custom Calendar Styles */
+
+.custom-calendar {
+  height: 100% !important;
+}
+
+.custom-calendar .rbc-toolbar {
+  display: none;
+}
+
+.custom-calendar .rbc-month-view {
+  border: none;
+  background: white;
+}
+
+.custom-calendar .rbc-month-row {
+  border-top: 1px solid #e5e7eb;
+}
+
+.custom-calendar .rbc-day-bg {
+  border-left: 1px solid #e5e7eb;
+}
+
+.custom-calendar .rbc-off-range-bg {
+  background: white;
+}
+
+.custom-calendar .rbc-off-range {
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+/* Önceki ve sonraki ayların günleri için stil */
+.custom-calendar .rbc-off-range .rbc-button-link {
+  color: #9ca3af !important;
+}
+
+.custom-calendar .rbc-header {
+  border-bottom: none;
+  padding: 8px 4px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #4b5563;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: auto;
+  min-height: auto;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.custom-calendar .rbc-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.custom-calendar .rbc-header .rbc-date {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1;
+}
+
+.custom-calendar .rbc-header .rbc-day-name {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: normal;
+  line-height: 1;
+}
+
+.custom-calendar .rbc-header + .rbc-header {
+  border-left: 1px solid #f1f5f9;
+}
+
+.custom-calendar .rbc-date-cell {
+  padding: 4px 8px;
+  text-align: left;
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+/* Bugünün tarihini daha belirgin yapma */
+.custom-calendar .rbc-date-cell.rbc-now {
+  position: relative;
+  padding-left: 0;
+}
+
+.custom-calendar .rbc-date-cell.rbc-now > * {
+  position: relative;
+  z-index: 1;
+  color: white;
+  font-weight: 500;
+  margin-left: 4px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-calendar .rbc-date-cell.rbc-now::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  background-color: rgb(124, 58, 237);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+/* Cumartesi ve Pazar günleri için kırmızı renk */
+.custom-calendar .rbc-header:nth-child(6) .rbc-date,
+.custom-calendar .rbc-header:nth-child(7) .rbc-date {
+  color: #ef4444;
+}
+
+/* Cumartesi ve Pazar günlerinin tarihleri için kırmızı renk */
+.custom-calendar .rbc-date-cell:nth-child(6),
+.custom-calendar .rbc-date-cell:nth-child(7) {
+  color: #ef4444;
+}
+
+/* Önceki ve sonraki ayların Cumartesi ve Pazar günleri için soluk kırmızı */
+.custom-calendar .rbc-off-range.rbc-date-cell:nth-child(6),
+.custom-calendar .rbc-off-range.rbc-date-cell:nth-child(7) {
+  color: #fca5a5 !important;
+  opacity: 0.5;
+}
+
+.custom-calendar .rbc-row-content {
+  z-index: 0;
+}
+
+.custom-calendar .rbc-row-segment {
+  padding: 2px 4px;
+}
+
+.custom-calendar .rbc-event {
+  background-color: #7c3aed;
+  border-radius: 6px;
+  color: white;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.custom-calendar .rbc-selected {
+  background-color: #6d28d9 !important;
+}
+
+.custom-calendar .rbc-show-more {
+  color: #7c3aed;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Seçili gün stilleri */
+.custom-calendar .rbc-day-bg.selected-day {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+  border-radius: 6px;
+  position: relative;
+}
+
+.custom-calendar .rbc-day-bg.selected-day::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid rgba(124, 58, 237, 0.3);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* Sadece hafta görünümü için özel stiller */
+.custom-calendar .rbc-time-view {
+  border: none;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Tüm gün etkinlikleri için özel stiller */
+.custom-calendar .rbc-time-view .rbc-allday-cell {
+  height: auto !important;
+  max-height: none;
+  position: relative;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #fafafa;
+}
+
+.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-row {
+  min-height: auto !important;
+}
+
+.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-event {
+  background-color: #7c3aed;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 4px;
+  position: relative;
+  width: calc(100% - 8px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.custom-calendar .rbc-time-view .rbc-allday-cell .rbc-event-content {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hafta görünümü için event stilleri */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event {
+  background-color: rgba(124, 58, 237, 0.08);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  position: absolute;
+  width: 100% !important;
+  left: 0;
+  right: 0;
+  margin: 0;
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.05);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(167, 139, 250, 0.7);
+  transition: all 0.2s ease;
+}
+
+/* Events container stil düzeltmesi */
+.custom-calendar .rbc-time-view .rbc-events-container {
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event-content {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event-label {
+  font-size: 0.875rem;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+
+/* Event hover durumu */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event:hover {
+  background-color: rgba(109, 40, 217, 0.15);
+  transform: scale(1.001);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
+  border-color: rgba(167, 139, 250, 0.9);
+}
+
+/* Event seçili durumu */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.rbc-selected {
+  background-color: rgba(109, 40, 217, 0.15);
+  transform: scale(1.001);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
+  border-color: rgba(167, 139, 250, 1);
+}
+
+/* Çakışan eventler için stil */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.rbc-overlap-event {
+  opacity: 0.95;
+}
+
+/* Time slot'lar için stil */
+.custom-calendar .rbc-time-view .rbc-time-content {
+  border: none;
+  margin-top: 0;
+  background: white;
+}
+
+/* Saat göstergesi sütunu */
+.custom-calendar .rbc-time-view .rbc-time-gutter {
+  padding-right: 12px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-weight: normal;
+  text-align: right;
+  background-color: transparent;
+  border: none;
+  position: relative;
+  width: 60px;
+}
+
+/* Saat göstergesi sütununun sağındaki çizgiyi kaldır */
+.custom-calendar .rbc-time-gutter .rbc-timeslot-group {
+  border: none;
+  position: relative;
+}
+
+/* Saat göstergesi sütununun sağına hafif bir çizgi ekle */
+.custom-calendar .rbc-time-gutter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #f1f5f9;
+}
+
+/* Saat çizgileri için stil */
+.custom-calendar .rbc-time-view .rbc-timeslot-group {
+  border-bottom: none;
+  min-height: 48px;
+  position: relative;
+}
+
+/* İlk yarım saat çizgisini gizle */
+.custom-calendar .rbc-time-view .rbc-timeslot-group .rbc-time-slot:first-child {
+  border-top: none;
+}
+
+/* Yarım saatlik çizgiler için stil - çok hafif */
+.custom-calendar .rbc-time-view .rbc-time-slot {
+  border-top: 1px solid #f8fafc;
+}
+
+/* Tam saatler için daha belirgin çizgi */
+.custom-calendar .rbc-time-view .rbc-timeslot-group:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: #e2e8f0;
+}
+
+/* Dikey çizgileri hafifletme */
+.custom-calendar .rbc-time-view .rbc-day-slot {
+  border-right: none;
+  position: relative;
+}
+
+.custom-calendar .rbc-time-view .rbc-day-slot:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #f1f5f9;
+}
+
+/* Saat sütununun solundaki çizgiyi kaldır */
+.custom-calendar .rbc-time-column {
+  border-left: none !important;
+}
+
+/* Bugünün arka plan rengi */
+.custom-calendar .rbc-time-view .rbc-today {
+  background-color: #faf5ff;
+}
+
+/* Mevcut saat çizgisi */
+.custom-calendar .rbc-time-view .rbc-current-time-indicator {
+  background-color: #7c3aed;
+  height: 1px;
+  opacity: 0.7;
+  z-index: 3;
+  position: absolute;
+  right: 0;
+  left: 0;
+}
+
+/* Hafta görünümü için özel başlık stilleri */
+.custom-calendar .rbc-time-header {
+  background-color: white;
+  border-bottom: none;
+  min-height: auto !important;
+}
+
+.custom-calendar .rbc-time-header-content {
+  border-left: none;
+  min-height: auto !important;
+}
+
+.custom-calendar .rbc-time-header-cell {
+  min-height: auto !important;
+}
+
+/* Tüm gün etkinlikleri için başlık */
+.custom-calendar .rbc-time-view .rbc-time-header-gutter {
+  background-color: transparent;
+  border-right: none;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: normal;
+  padding: 8px;
+  width: 60px;
+}
+
+/* Başlık hücresi stilleri */
+.custom-calendar .rbc-time-header {
+  background-color: white;
+  border-bottom: none;
+}
+
+.custom-calendar .rbc-time-header-content {
+  border-left: none;
+  min-height: auto;
+}
+
+.custom-calendar .rbc-header {
+  border-bottom: none;
+  padding: 8px 4px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #4b5563;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: auto;
+  min-height: auto;
+}
+
+.custom-calendar .rbc-header + .rbc-header {
+  border-left: 1px solid #f1f5f9;
+}
+
+/* Genel takvim container'ı */
+.custom-calendar .rbc-time-view {
+  border: none;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Seçili zaman aralığı için stil */
+.custom-calendar .rbc-time-view .rbc-time-slot.rbc-selected-cell {
+  background-color: rgba(124, 58, 237, 0.08);
+}
