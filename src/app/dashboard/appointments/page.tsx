@@ -90,7 +90,12 @@ interface Event {
   title: string;
   start: Date;
   end: Date;
-  resourceId?: string;
+  allDay?: boolean;
+  resource?: {
+    isMultiDay: boolean;
+    capacity: number;
+    isPast: boolean;
+  };
 }
 
 interface CreateEventModalProps {
@@ -790,10 +795,34 @@ const WeekHeader = ({ date }: { date: Date }) => {
   );
 };
 
+const DayHeader = ({ date, label }: { date: Date; label: string }) => {
+  const isToday = isSameDay(date, new Date());
+  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+  return (
+    <div className="flex flex-col items-center justify-center py-2 border-b border-gray-200">
+      <div className="text-base font-medium">
+        <span
+          className={`${isWeekend ? "text-red-500" : "text-gray-900"} ${
+            isToday ? "text-violet-600" : ""
+          }`}
+        >
+          {format(date, "d MMMM yyyy", { locale: tr })}
+        </span>
+      </div>
+      <div className="text-sm text-gray-500">
+        {format(date, "EEEE", { locale: tr })}
+      </div>
+    </div>
+  );
+};
+
 const formatEvents = (reservations: any[]): Event[] => {
+  const now = new Date();
   return (reservations || []).map((reservation: any) => {
     const start = new Date(reservation.startDate);
     const end = new Date(reservation.endDate);
+    const isPast = end < now;
 
     return {
       id: reservation._id,
@@ -804,6 +833,7 @@ const formatEvents = (reservations: any[]): Event[] => {
       resource: {
         isMultiDay: reservation.isMultiDay,
         capacity: reservation.capacity,
+        isPast: isPast,
       },
     };
   });
@@ -822,49 +852,20 @@ export default function Appointments() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [datePickerMonth, setDatePickerMonth] = useState(new Date());
 
-  const CustomToolbar = ({ date, onNavigate, onView, view }: any) => (
-    <div className="flex items-center justify-between mb-4 px-2">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setIsDatePickerOpen(true)}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <svg
-            className="w-5 h-5 text-gray-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <span>{format(date, "MMMM yyyy", { locale: tr })}</span>
-          <svg
-            className="w-4 h-4 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
+  const CustomToolbar = ({ date, onNavigate, onView, view }: any) => {
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    const isToday = isSameDay(date, new Date());
 
-        <div className="flex items-center gap-1 ml-2">
+    return (
+      <div className="flex items-center justify-between mb-4 px-2">
+        {/* Sol: Ay seçici ve navigasyon */}
+        <div className="flex items-center gap-2 w-1/3">
           <button
-            onClick={() => onNavigate("PREV")}
-            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={() => setIsDatePickerOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <svg
-              className="w-5 h-5"
+              className="w-5 h-5 text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -873,24 +874,12 @@ export default function Appointments() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M15 19l-7-7 7-7"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-          </button>
-
-          <button
-            onClick={() => onNavigate("TODAY")}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Bugün
-          </button>
-
-          <button
-            onClick={() => onNavigate("NEXT")}
-            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+            <span>{format(date, "MMMM yyyy", { locale: tr })}</span>
             <svg
-              className="w-5 h-5"
+              className="w-4 h-4 text-gray-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -899,47 +888,119 @@ export default function Appointments() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M9 5l7 7-7 7"
+                d="M19 9l-7 7-7-7"
               />
             </svg>
           </button>
+
+          <div className="flex items-center gap-1 ml-2">
+            <button
+              onClick={() => onNavigate("PREV")}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+
+            <button
+              onClick={() => onNavigate("TODAY")}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Bugün
+            </button>
+
+            <button
+              onClick={() => onNavigate("NEXT")}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Orta: Tarih gösterimi (sadece gün görünümünde) */}
+        <div className="flex justify-center w-1/3">
+          {view === "day" && (
+            <div className="text-sm">
+              <span
+                className={`font-medium ${
+                  isToday ? "text-violet-600" : "text-gray-900"
+                }`}
+              >
+                {format(date, "d MMMM yyyy", { locale: tr })}
+              </span>
+              <span
+                className={`ml-2 ${
+                  isWeekend ? "text-red-500" : "text-gray-500"
+                }`}
+              >
+                {format(date, "EEEE", { locale: tr })}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Sağ: Görünüm seçenekleri */}
+        <div className="flex justify-end w-1/3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onView("month")}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                view === "month"
+                  ? "bg-violet-600 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              Ay
+            </button>
+            <button
+              onClick={() => onView("week")}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                view === "week"
+                  ? "bg-violet-600 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              Hafta
+            </button>
+            <button
+              onClick={() => onView("day")}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                view === "day"
+                  ? "bg-violet-600 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              Gün
+            </button>
+          </div>
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onView("month")}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            view === "month"
-              ? "bg-violet-600 text-white"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          Ay
-        </button>
-        <button
-          onClick={() => onView("week")}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            view === "week"
-              ? "bg-violet-600 text-white"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          Hafta
-        </button>
-        <button
-          onClick={() => onView("day")}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-            view === "day"
-              ? "bg-violet-600 text-white"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          Gün
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Randevuları yükle
   const loadEvents = useCallback(async () => {
@@ -980,14 +1041,24 @@ export default function Appointments() {
       if (selectedMonth !== currentMonth) {
         // Seçilen güne göre ay değişimi yap
         setDate(selectedDay);
+      } else if (view === "month") {
+        // Mevcut ayın günlerine tıklandığında hafta görünümüne geç
+        setDate(selectedDay);
+        setView("week");
       } else {
-        // Mevcut ayın günlerine tıklandığında randevu oluşturma modalını aç
+        // Hafta görünümünde randevu oluşturma modalını aç
         setSelectedSlot(slotInfo);
         setIsCreateModalOpen(true);
       }
     },
-    [date]
+    [date, view]
   );
+
+  const eventPropGetter = useCallback((event: Event) => {
+    return {
+      className: event.resource?.isPast ? "past-event" : "",
+    };
+  }, []);
 
   return (
     <div className="h-[calc(100vh-80px)] p-2">
@@ -1010,6 +1081,7 @@ export default function Appointments() {
             defaultView="month"
             popup
             className="custom-calendar"
+            eventPropGetter={eventPropGetter}
             components={{
               toolbar: CustomToolbar,
               week: {

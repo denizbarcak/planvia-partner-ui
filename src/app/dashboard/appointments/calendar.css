@@ -449,3 +449,61 @@
 .custom-calendar .rbc-time-view .rbc-time-slot.rbc-selected-cell {
   background-color: rgba(124, 58, 237, 0.08);
 }
+
+/* Geçmiş etkinlikler için stil */
+.custom-calendar .rbc-event.past-event {
+  background-color: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+}
+
+.custom-calendar .rbc-event.past-event:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+}
+
+/* Hafta görünümündeki geçmiş etkinlikler için stil */
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.past-event {
+  background-color: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.custom-calendar .rbc-time-view .rbc-time-content .rbc-event.past-event:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+}
+
+.custom-calendar
+  .rbc-time-view
+  .rbc-time-content
+  .rbc-event.past-event
+  .rbc-event-content,
+.custom-calendar
+  .rbc-time-view
+  .rbc-time-content
+  .rbc-event.past-event
+  .rbc-event-label {
+  color: #6b7280 !important;
+}
+
+/* Gün görünümü için özel stiller */
+.custom-calendar .rbc-time-view.rbc-time-view--day .rbc-time-header {
+  display: none;
+}
+
+.custom-calendar .rbc-time-view.rbc-time-view--day {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.custom-calendar .rbc-time-view.rbc-time-view--day .rbc-header {
+  border: none;
+}
