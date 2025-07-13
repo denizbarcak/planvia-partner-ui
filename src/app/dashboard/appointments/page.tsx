@@ -146,11 +146,14 @@ const CreateEventModal = ({
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringType, setRecurringType] = useState<
+    "daily" | "weekly" | "monthly" | "yearly" | "custom"
+  >("weekly");
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [recurringEndType, setRecurringEndType] = useState<"after" | "on">(
-    "after"
-  );
-  const [recurringEndCount, setRecurringEndCount] = useState(0);
+  const [recurringEndType, setRecurringEndType] = useState<
+    "never" | "after" | "on"
+  >("never");
+  const [recurringEndCount, setRecurringEndCount] = useState(1);
   const [recurringEndDate, setRecurringEndDate] = useState<Date | null>(null);
   const [nameError, setNameError] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -164,9 +167,10 @@ const CreateEventModal = ({
     setStartTime(null);
     setEndTime(null);
     setIsRecurring(false);
+    setRecurringType("weekly");
     setSelectedDays([]);
-    setRecurringEndType("after");
-    setRecurringEndCount(0);
+    setRecurringEndType("never");
+    setRecurringEndCount(1);
     setRecurringEndDate(null);
     setNameError(false);
   };
@@ -185,10 +189,9 @@ const CreateEventModal = ({
       const recurrence = eventToEdit.resource?.recurrence;
       if (recurrence?.enabled) {
         setIsRecurring(true);
+        setRecurringType(recurrence.type);
         setSelectedDays(recurrence.daysOfWeek || []);
-        setRecurringEndType(
-          recurrence.endType === "never" ? "after" : recurrence.endType
-        );
+        setRecurringEndType(recurrence.endType);
         if (recurrence.endType === "after") {
           setRecurringEndCount(recurrence.endAfter || 1);
         } else if (recurrence.endType === "on" && recurrence.endDate) {
@@ -210,7 +213,6 @@ const CreateEventModal = ({
 
     setStartTime(selectedSlot.start);
     setEndTime(selectedSlot.end);
-    // Başlangıç gününü otomatik seç
     setSelectedDays([selectedSlot.start.getDay()]);
 
     return () => {
@@ -229,86 +231,39 @@ const CreateEventModal = ({
     }
 
     try {
-      if (isRecurring) {
-        // Seçili günlerde rezervasyonlar oluştur
-        const startDate = startOfDay(startTime);
-        const promises: Promise<any>[] = [];
+      // Rezervasyon verilerini hazırla
+      const reservationData = {
+        name: reservationName.trim(),
+        startDate: startTime,
+        endDate: endTime,
+        isAllDay,
+        isMultiDay,
+        capacity: reservationCount,
+        ...(isRecurring && {
+          recurrence: {
+            enabled: true,
+            type: recurringType,
+            daysOfWeek: selectedDays,
+            endType: recurringEndType,
+            ...(recurringEndType === "after" && {
+              endAfter: recurringEndCount,
+            }),
+            ...(recurringEndType === "on" &&
+              recurringEndDate && { endDate: recurringEndDate }),
+          },
+        }),
+      };
 
-        // Seçili hafta sayısı kadar döngü
-        for (let week = 0; week <= recurringEndCount; week++) {
-          // Her seçili gün için rezervasyon oluştur
-          selectedDays.forEach((dayId) => {
-            // Seçili günün tarihini hesapla
-            const dayDiff = dayId - startDate.getDay();
-            let reservationDate = addDays(startDate, dayDiff);
-
-            // Eğer bu hafta değilse, hafta sayısı kadar ileri al
-            if (week > 0) {
-              reservationDate = addDays(reservationDate, week * 7);
-            }
-
-            // Saatleri ayarla
-            const reservationStartTime = new Date(reservationDate);
-            reservationStartTime.setHours(
-              startTime.getHours(),
-              startTime.getMinutes()
-            );
-
-            const reservationEndTime = new Date(reservationDate);
-            reservationEndTime.setHours(
-              endTime.getHours(),
-              endTime.getMinutes()
-            );
-
-            const reservationData = {
-              name: reservationName.trim(),
-              startDate: reservationStartTime,
-              endDate: reservationEndTime,
-              isAllDay,
-              isMultiDay,
-              capacity: reservationCount,
-            };
-
-            // İlk gün ve ilk hafta için güncelleme, diğerleri için yeni oluşturma
-            if (
-              editMode &&
-              eventToEdit?.id &&
-              week === 0 &&
-              dayId === startDate.getDay()
-            ) {
-              promises.push(
-                reservationService.update(eventToEdit.id, reservationData)
-              );
-            } else {
-              promises.push(reservationService.create(reservationData));
-            }
-          });
-        }
-
-        await Promise.all(promises);
-        toast.success(
-          editMode
-            ? "Rezervasyonlar başarıyla güncellendi"
-            : "Rezervasyonlar başarıyla oluşturuldu"
-        );
+      if (editMode && eventToEdit?.id) {
+        // Güncelleme işlemi
+        console.log("Updating reservation with ID:", eventToEdit.id);
+        console.log("Update data:", reservationData);
+        await reservationService.update(eventToEdit.id, reservationData);
+        toast.success("Rezervasyon başarıyla güncellendi");
       } else {
-        // Tekrarsız tek rezervasyon oluştur
-        const reservationData = {
-          name: reservationName.trim(),
-          startDate: startTime,
-          endDate: endTime,
-          isAllDay,
-          isMultiDay,
-          capacity: reservationCount,
-        };
-
-        if (editMode && eventToEdit?.id) {
-          await reservationService.update(eventToEdit.id, reservationData);
-          toast.success("Rezervasyon başarıyla güncellendi");
-        } else {
-          await reservationService.create(reservationData);
-          toast.success("Rezervasyon başarıyla oluşturuldu");
-        }
+        // Yeni oluşturma işlemi
+        await reservationService.create(reservationData);
+        toast.success("Rezervasyon başarıyla oluşturuldu");
       }
 
       // Modal'ı kapat ve formu resetle
@@ -371,24 +326,9 @@ const CreateEventModal = ({
   ];
 
   const toggleDay = (dayId: number) => {
-    if (!selectedSlot) return;
-
-    // Seçilen günden önceki günleri filtrele
-    const startDay = selectedSlot.start.getDay();
-    setSelectedDays((prev) => {
-      // Hafta sayısı 0'dan büyükse tüm günlere izin ver
-      const filteredDays =
-        recurringEndCount > 0
-          ? prev // Tüm günleri koru
-          : prev.filter((d) => {
-              if (d === 0) return true; // Pazar gününü her zaman kabul et
-              return d >= startDay; // Diğer günler için normal kontrol
-            });
-
-      return filteredDays.includes(dayId)
-        ? filteredDays.filter((d) => d !== dayId)
-        : [...filteredDays, dayId];
-    });
+    setSelectedDays((prev) =>
+      prev.includes(dayId) ? prev.filter((d) => d !== dayId) : [...prev, dayId]
+    );
   };
 
   if (!selectedSlot || !startTime || !endTime) return null;
@@ -800,55 +740,62 @@ const CreateEventModal = ({
 
                   {isRecurring && (
                     <div className="mt-4 space-y-4">
-                      {/* Gün Seçimi */}
-                      <div className="flex flex-wrap gap-2">
-                        {weekDays.map((day) => {
-                          const isStartDay =
-                            selectedSlot &&
-                            day.id === selectedSlot.start.getDay();
-                          const isSelected = selectedDays.includes(day.id);
+                      {/* Tekrarlama Tipi */}
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={recurringType}
+                          onChange={(e) =>
+                            setRecurringType(e.target.value as any)
+                          }
+                          className="bg-white rounded-lg px-4 py-2 text-gray-900 shadow-sm"
+                        >
+                          <option value="daily">Her gün</option>
+                          <option value="weekly">Her hafta</option>
+                          <option value="monthly">Her ay</option>
+                          <option value="yearly">Her yıl</option>
+                          <option value="custom">Özel</option>
+                        </select>
+                      </div>
 
-                          // Seçilen günden önceki günleri kontrol et
-                          const isPastDay =
-                            selectedSlot &&
-                            (() => {
-                              // Hafta sayısı 0'dan büyükse hiçbir gün geçmiş sayılmaz
-                              if (recurringEndCount > 0) return false;
-
-                              const startDay = selectedSlot.start.getDay();
-                              // Pazar günü için özel kontrol (0)
-                              if (day.id === 0) return false; // Pazar günü her zaman tıklanabilir
-                              return day.id < startDay;
-                            })();
-
-                          // Başlangıç günü dışında tüm günler seçilebilir olmalı
-                          const isDisabled = isStartDay;
-
-                          return (
+                      {/* Haftalık tekrar için gün seçimi */}
+                      {recurringType === "weekly" && (
+                        <div className="flex flex-wrap gap-2">
+                          {weekDays.map((day) => (
                             <button
                               key={day.id}
-                              onClick={() => !isDisabled && toggleDay(day.id)}
-                              disabled={isDisabled}
+                              onClick={() => toggleDay(day.id)}
                               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                                isStartDay
-                                  ? "bg-violet-600 text-white cursor-not-allowed opacity-75"
-                                  : isPastDay
-                                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                  : isSelected
+                                selectedDays.includes(day.id)
                                   ? "bg-violet-600 text-white"
                                   : "bg-white text-gray-700 hover:bg-gray-100"
                               }`}
                             >
                               {day.name}
                             </button>
-                          );
-                        })}
-                      </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Tekrarlama Bitiş Seçenekleri */}
                       <div className="space-y-3">
                         <div className="text-sm font-medium text-gray-700 mb-2">
                           Tekrarlama Sonu
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            id="never"
+                            checked={recurringEndType === "never"}
+                            onChange={() => setRecurringEndType("never")}
+                            className="text-violet-600 focus:ring-violet-500"
+                          />
+                          <label
+                            htmlFor="never"
+                            className="text-sm text-gray-700"
+                          >
+                            Süresiz
+                          </label>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -863,15 +810,15 @@ const CreateEventModal = ({
                             htmlFor="after"
                             className="text-sm text-gray-700"
                           >
-                            Kaç hafta:
+                            Tekrar sayısı:
                           </label>
                           <input
                             type="number"
-                            min="0"
+                            min="1"
                             value={recurringEndCount}
                             onChange={(e) =>
                               setRecurringEndCount(
-                                Math.max(0, parseInt(e.target.value) || 0)
+                                Math.max(1, parseInt(e.target.value) || 1)
                               )
                             }
                             disabled={recurringEndType !== "after"}
@@ -879,7 +826,6 @@ const CreateEventModal = ({
                               recurringEndType !== "after" ? "opacity-50" : ""
                             }`}
                           />
-                          <span className="text-sm text-gray-700">hafta</span>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -975,50 +921,6 @@ const CreateEventModal = ({
   );
 };
 
-// ReservationDetailsModal bileşeni
-const ReservationDetailsModal = ({
-  isOpen,
-  onClose,
-  event,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  event: Event;
-}) => {
-  return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="bg-white rounded-2xl shadow-xl p-6 w-[700px]">
-          <div className="flex items-center justify-between mb-6">
-            <div className="text-lg font-semibold text-gray-900">
-              Rezervasyon Detayları
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <svg
-                className="w-5 h-5 text-gray-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </Dialog.Panel>
-      </div>
-    </Dialog>
-  );
-};
-
 const WeekHeader = ({ date }: { date: Date }) => {
   const isToday = isSameDay(date, new Date());
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -1103,7 +1005,6 @@ const CustomEvent = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const isPast = event.resource?.isPast;
 
   return (
     <div className="relative h-full">
@@ -1114,21 +1015,13 @@ const CustomEvent = ({
           setIsModalOpen(true);
         }}
       >
-        <EllipsisHorizontalIcon
-          className={`w-3 h-3 ${isPast ? "text-gray-400" : "text-inherit"}`}
-        />
+        <EllipsisHorizontalIcon className="w-3 h-3 text-inherit" />
       </button>
       <div
         className="px-2 py-1 h-full cursor-pointer"
         onClick={() => setIsDetailsModalOpen(true)}
       >
-        <div
-          className={`text-sm font-medium ${
-            isPast ? "text-gray-400" : "text-gray-900"
-          }`}
-        >
-          {event.title}
-        </div>
+        <div className="text-sm font-medium">{event.title}</div>
       </div>
 
       {isModalOpen && (
@@ -1156,6 +1049,423 @@ const CustomEvent = ({
         />
       )}
     </div>
+  );
+};
+
+// Yeni CustomerFieldsSettingsModal bileşeni
+interface CustomerFields {
+  name: boolean;
+  surname: boolean;
+  phone: boolean;
+  personCount: boolean;
+  notes: boolean;
+}
+
+const CustomerFieldsSettingsModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialFields = {
+    name: false,
+    surname: false,
+    phone: false,
+    personCount: false,
+    notes: false,
+  },
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (fields: CustomerFields) => void;
+  initialFields?: CustomerFields;
+}) => {
+  const [fields, setFields] = useState<CustomerFields>(initialFields);
+
+  const handleSave = () => {
+    onSave(fields);
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-[60]">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="bg-white rounded-lg shadow-xl p-6 w-[400px]">
+          <div className="flex items-center justify-between mb-6">
+            <Dialog.Title className="text-lg font-medium text-gray-900">
+              Müşteri Alanları
+            </Dialog.Title>
+            <button
+              onClick={handleSave}
+              className="p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* İsim */}
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm text-gray-700">İsim</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={fields.name}
+                  onChange={() => setFields({ ...fields, name: !fields.name })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+              </div>
+            </label>
+
+            {/* Soyad */}
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm text-gray-700">Soyad</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={fields.surname}
+                  onChange={() =>
+                    setFields({ ...fields, surname: !fields.surname })
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+              </div>
+            </label>
+
+            {/* Telefon */}
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm text-gray-700">Telefon No</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={fields.phone}
+                  onChange={() =>
+                    setFields({ ...fields, phone: !fields.phone })
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+              </div>
+            </label>
+
+            {/* Kişi Sayısı */}
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm text-gray-700">Kişi Sayısı</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={fields.personCount}
+                  onChange={() =>
+                    setFields({ ...fields, personCount: !fields.personCount })
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+              </div>
+            </label>
+
+            {/* Açıklama */}
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm text-gray-700">Açıklama</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={fields.notes}
+                  onChange={() =>
+                    setFields({ ...fields, notes: !fields.notes })
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+              </div>
+            </label>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+};
+
+// ReservationDetailsModal bileşenini güncelle
+const ReservationDetailsModal = ({
+  isOpen,
+  onClose,
+  event,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  event: Event;
+}) => {
+  const [customers, setCustomers] = useState<number[]>([]);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [customerFields, setCustomerFields] = useState<CustomerFields>({
+    name: false,
+    surname: false,
+    phone: false,
+    personCount: false,
+    notes: false,
+  });
+  const capacity = event.resource?.capacity || 1;
+
+  // Load customers when modal opens
+  useEffect(() => {
+    if (isOpen && event.id) {
+      const savedCustomers = localStorage.getItem(`customers-${event.id}`);
+      if (savedCustomers) {
+        setCustomers(JSON.parse(savedCustomers));
+      }
+
+      // Load saved field settings
+      const savedFields = localStorage.getItem(`customerFields-${event.id}`);
+      if (savedFields) {
+        setCustomerFields(JSON.parse(savedFields) as CustomerFields);
+      }
+    }
+  }, [isOpen, event.id]);
+
+  // Save customers to localStorage when they change
+  useEffect(() => {
+    if (event.id) {
+      if (customers.length > 0) {
+        localStorage.setItem(
+          `customers-${event.id}`,
+          JSON.stringify(customers)
+        );
+      } else {
+        localStorage.removeItem(`customers-${event.id}`);
+      }
+    }
+  }, [customers, event.id]);
+
+  // Save field settings to localStorage when they change
+  const handleFieldSettingsSave = (fields: CustomerFields) => {
+    setCustomerFields(fields);
+    if (event.id) {
+      localStorage.setItem(
+        `customerFields-${event.id}`,
+        JSON.stringify(fields)
+      );
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="bg-white rounded-lg shadow-lg p-8 w-[70%] max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="text-base font-medium text-gray-900">
+              Rezervasyon Detayları
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {/* Reservation Info Section */}
+          <div className="grid grid-cols-3 gap-4 mb-8 bg-gray-50 p-5 rounded-lg">
+            {/* Reservation Name */}
+            <div className="flex flex-col">
+              <div className="text-xs text-gray-500 mb-1">Rezervasyon Adı</div>
+              <div className="text-sm font-medium text-gray-900">
+                {event.title}
+              </div>
+            </div>
+
+            {/* Date and Time */}
+            <div className="flex flex-col">
+              <div className="text-xs text-gray-500 mb-1">Tarih ve Saat</div>
+              <div className="text-sm font-medium text-gray-900">
+                {format(event.start, "d MMMM yyyy • HH:mm", { locale: tr })} -{" "}
+                {format(event.end, "HH:mm", { locale: tr })}
+              </div>
+            </div>
+
+            {/* Capacity */}
+            <div className="flex flex-col">
+              <div className="text-xs text-gray-500 mb-1">Kontenjan</div>
+              <div className="text-sm font-medium text-gray-900">
+                {customers.length}/{capacity}
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="text-base font-medium text-gray-900">Notlar</div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              {/* Add Note Button */}
+              <button className="h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 hover:bg-gray-100 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center group-hover:bg-violet-200 transition-colors">
+                  <svg
+                    className="w-4 h-4 text-violet-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
+                  </svg>
+                </div>
+                <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                  Not Ekle
+                </span>
+              </button>
+
+              {/* Example Note 1 */}
+              <div className="h-32 bg-yellow-50 rounded-lg p-4 shadow-sm hover:shadow transition-shadow">
+                <div className="h-full flex flex-col">
+                  <div className="text-sm text-yellow-800 line-clamp-4">
+                    Müşteri özel istekleri: Pencere kenarı tercih edilecek
+                  </div>
+                  <div className="mt-auto pt-2 flex items-center justify-between text-xs text-yellow-600">
+                    <span>14:30</span>
+                    <button className="hover:text-yellow-800">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Example Note 2 */}
+              <div className="h-32 bg-blue-50 rounded-lg p-4 shadow-sm hover:shadow transition-shadow">
+                <div className="h-full flex flex-col">
+                  <div className="text-sm text-blue-800 line-clamp-4">
+                    Doğum günü kutlaması için pasta siparişi verilecek
+                  </div>
+                  <div className="mt-auto pt-2 flex items-center justify-between text-xs text-blue-600">
+                    <span>15:45</span>
+                    <button className="hover:text-blue-800">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customers Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="text-base font-medium text-gray-900">
+                Müşteriler
+              </div>
+              <button
+                onClick={() => setIsSettingsModalOpen(true)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-900">1. Müşteri</div>
+              <button className="px-6 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center justify-center w-60 gap-1">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Settings Modal */}
+          <CustomerFieldsSettingsModal
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            onSave={handleFieldSettingsSave}
+            initialFields={customerFields}
+          />
+        </Dialog.Panel>
+      </div>
+    </Dialog>
   );
 };
 
@@ -1499,16 +1809,16 @@ export default function Appointments() {
                       setIsDatePickerOpen(false);
                     }}
                     className={`
-                      p-2 text-sm rounded-lg transition-colors
-                      ${isSelected ? "bg-violet-600 text-white" : ""}
-                      ${
-                        !isSelected && isCurrentMonth
-                          ? "text-gray-900"
-                          : "text-gray-400"
-                      }
-                      ${!isSelected && isTodayDate ? "bg-violet-50" : ""}
-                      ${!isSelected ? "hover:bg-gray-100" : ""}
-                    `}
+                          p-2 text-sm rounded-lg transition-colors
+                          ${isSelected ? "bg-violet-600 text-white" : ""}
+                          ${
+                            !isSelected && isCurrentMonth
+                              ? "text-gray-900"
+                              : "text-gray-400"
+                          }
+                          ${!isSelected && isTodayDate ? "bg-violet-50" : ""}
+                          ${!isSelected ? "hover:bg-gray-100" : ""}
+                        `}
                   >
                     {format(day, "d")}
                   </button>
